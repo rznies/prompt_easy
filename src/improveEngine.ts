@@ -5,6 +5,7 @@
  * Issue #2: Phase 1a - LLM Interface Setup
  */
 
+import { StorageWrapper } from './shared/storage';
 import { ApiKeyManager } from './shared/apiKeyManager';
 import { callLLM, LLMOptions } from './shared/llmClient';
 
@@ -77,6 +78,9 @@ export class PromptEasyEngine {
           apiKey: resolvedKey,
         });
 
+        // Update usage statistics asynchronously
+        this.updateUsageStats(prompt, improvedPrompt).catch(console.error);
+
         // Return only the improved prompt text (no metadata wrapper)
         return improvedPrompt.trim();
       } catch (error: any) {
@@ -117,6 +121,26 @@ export class PromptEasyEngine {
     }
     
     throw new Error('Failed to improve prompt: Max retries exceeded');
+  }
+
+  /**
+   * Update usage statistics tracking calls and tokens
+   */
+  private async updateUsageStats(input: string, output: string): Promise<void> {
+    try {
+      const calls = (await StorageWrapper.getLocal('totalCalls')) || 0;
+      const tokensIn = (await StorageWrapper.getLocal('estimatedTokensIn')) || 0;
+      const tokensOut = (await StorageWrapper.getLocal('estimatedTokensOut')) || 0;
+
+      const inputTokens = Math.ceil(input.length / 4);
+      const outputTokens = Math.ceil(output.length / 4);
+
+      await StorageWrapper.setLocal('totalCalls', calls + 1);
+      await StorageWrapper.setLocal('estimatedTokensIn', tokensIn + inputTokens);
+      await StorageWrapper.setLocal('estimatedTokensOut', tokensOut + outputTokens);
+    } catch (error) {
+      console.error('Failed to update usage stats:', error);
+    }
   }
 
   /**
