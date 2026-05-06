@@ -42,6 +42,14 @@ Users don't know how to ask, so they get generic answers and waste time re-promp
 2. **Phase 2**: Manual Popup UI
 3. **Phase 3**: Site Injection
 
+## How to load locally for development
+
+1. Run `npm install` to install dependencies.
+2. Run `npm run build` to compile the extension.
+3. Open Chrome and go to `chrome://extensions/`.
+4. Enable "Developer mode" in the top right corner.
+5. Click "Load unpacked" and select the `dist/` directory from this project.
+
 ## License
 
 MIT
