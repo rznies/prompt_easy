@@ -5,6 +5,8 @@
  * Issue #2: Phase 1a - LLM Interface Setup
  */
 
+import { ApiKeyManager } from './shared/apiKeyManager';
+
 export interface LLMOptions {
   provider: 'google' | 'openai';
   model: string;
@@ -18,7 +20,7 @@ export interface ImproveOptions {
 }
 
 export interface ImproveEngineConfig {
-  apiKey: string;
+  apiKey?: string;
   provider?: 'google' | 'openai';
   model?: string;
 }
@@ -55,18 +57,14 @@ CONSTRAINTS: Be concise and actionable`;
 }
 
 export class PromptEasyEngine {
-  private apiKey: string;
+  private apiKey?: string;
   private provider: 'google' | 'openai';
   private model: string;
   private readonly DEFAULT_MODEL = 'gemini-2.0-flash';
   private readonly FALLBACK_MODEL = 'gemini-1.5-flash';
   private readonly MAX_INPUT_TOKENS = 500;
 
-  constructor(config: ImproveEngineConfig) {
-    if (!config.apiKey) {
-      throw new Error('API key is required');
-    }
-
+  constructor(config: ImproveEngineConfig = {}) {
     this.apiKey = config.apiKey;
     this.provider = config.provider || 'google';
     this.model = config.model || this.DEFAULT_MODEL;
@@ -90,22 +88,32 @@ export class PromptEasyEngine {
     // Build system prompt that instructs the model to improve the prompt
     const systemPrompt = this.buildSystemPrompt(options?.context);
 
+    // Resolve API key
+    let resolvedKey = this.apiKey;
+    if (!resolvedKey) {
+      try {
+        resolvedKey = await ApiKeyManager.getKey();
+      } catch (error: any) {
+        throw new Error(`Authentication failed: ${error.message}`);
+      }
+    }
+
     // Call LLM with model-agnostic interface
     try {
       const improvedPrompt = await callLLM(systemPrompt + '\n\n' + prompt, {
         provider: this.provider,
         model: this.model,
-        apiKey: this.apiKey,
+        apiKey: resolvedKey,
       });
 
       // Return only the improved prompt text (no metadata wrapper)
       return improvedPrompt.trim();
     } catch (error) {
       // Normalize error shape for UI callers
-      if (error instanceof Error) {
+      if (error instanceof Error && !error.message.startsWith('Authentication failed:')) {
         throw new Error(`Failed to improve prompt: ${error.message}`);
       }
-      throw new Error('Failed to improve prompt: Unknown error');
+      throw error;
     }
   }
 
