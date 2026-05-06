@@ -6,12 +6,7 @@
  */
 
 import { ApiKeyManager } from './shared/apiKeyManager';
-
-export interface LLMOptions {
-  provider: 'google' | 'openai';
-  model: string;
-  apiKey: string;
-}
+import { callLLM, LLMOptions } from './shared/llmClient';
 
 export interface ImproveOptions {
   maxTokens?: number;
@@ -23,37 +18,6 @@ export interface ImproveEngineConfig {
   apiKey?: string;
   provider?: 'google' | 'openai';
   model?: string;
-}
-
-/**
- * Model-agnostic LLM interface
- * 
- * Accepts provider, model, and API key to allow flexible provider/model swapping
- * without tightly coupling the improve engine to any specific provider.
- */
-export async function callLLM(
-  prompt: string,
-  options: LLMOptions
-): Promise<string> {
-  const { provider, model, apiKey } = options;
-
-  if (!apiKey) {
-    throw new Error('API key is required');
-  }
-
-  if (provider === 'google') {
-    // TODO: Integrate with actual Google Gemini API
-    // For now, return mock response with structured format
-    return `ROLE: Expert assistant in the relevant domain
-TASK: ${prompt.substring(0, 50)}...
-OUTPUT FORMAT: Clear, structured text with sections
-CONSTRAINTS: Be concise and actionable`;
-  } else if (provider === 'openai') {
-    // TODO: Integrate with actual OpenAI API
-    throw new Error('OpenAI provider not yet implemented');
-  }
-
-  throw new Error(`Unknown provider: ${provider}`);
 }
 
 export class PromptEasyEngine {
@@ -94,27 +58,65 @@ export class PromptEasyEngine {
       try {
         resolvedKey = await ApiKeyManager.getKey();
       } catch (error: any) {
+        if (error.message.includes('Session key lost')) {
+          throw new Error('Session expired. Please re-enter your API key.');
+        }
         throw new Error(`Authentication failed: ${error.message}`);
       }
     }
 
-    // Call LLM with model-agnostic interface
-    try {
-      const improvedPrompt = await callLLM(systemPrompt + '\n\n' + prompt, {
-        provider: this.provider,
-        model: this.model,
-        apiKey: resolvedKey,
-      });
+    // Call LLM with model-agnostic interface and retry logic
+    let attempts = 0;
+    const maxRetries = 2;
+    
+    while (attempts <= maxRetries) {
+      try {
+        const improvedPrompt = await callLLM(systemPrompt + '\n\n' + prompt, {
+          provider: this.provider,
+          model: this.model,
+          apiKey: resolvedKey,
+        });
 
-      // Return only the improved prompt text (no metadata wrapper)
-      return improvedPrompt.trim();
-    } catch (error) {
-      // Normalize error shape for UI callers
-      if (error instanceof Error && !error.message.startsWith('Authentication failed:')) {
-        throw new Error(`Failed to improve prompt: ${error.message}`);
+        // Return only the improved prompt text (no metadata wrapper)
+        return improvedPrompt.trim();
+      } catch (error: any) {
+        const msg = error.message || String(error);
+        
+        const isRateLimit = msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('rate limit');
+        const isNetworkError = msg.includes('fetch failed') || msg.includes('Network error') || msg.includes('ECONNREFUSED');
+        
+        if ((isRateLimit || isNetworkError) && attempts < maxRetries) {
+          attempts++;
+          // Exponential backoff: 1s, 2s
+          const delay = Math.pow(2, attempts - 1) * 1000;
+          await new Promise((res) => setTimeout(res, delay));
+          continue;
+        }
+
+        // Normalize error shape for UI callers
+        if (msg.includes('403') || msg.includes('API key not valid') || msg.includes('invalid api key')) {
+          throw new Error('API key invalid. Please check and re-enter.');
+        }
+        if (isRateLimit) {
+          throw new Error('Rate limited. Wait a moment and try again.');
+        }
+        if (msg.includes('Quota exceeded') || msg.includes('quota') || msg.includes('402')) {
+          throw new Error('Quota exceeded. Add your own key or try another model.');
+        }
+        if (isNetworkError) {
+          throw new Error('Network error. Check connection.');
+        }
+        if (msg.includes('Unknown provider') || msg.includes('not found') || msg.includes('unsupported')) {
+          throw new Error(`Unsupported provider/model configuration.`);
+        }
+        
+        // Generic fallback - ensure we don't leak keys
+        const safeMsg = msg.replace(resolvedKey, '***');
+        throw new Error(`Failed to improve prompt: ${safeMsg}`);
       }
-      throw error;
     }
+    
+    throw new Error('Failed to improve prompt: Max retries exceeded');
   }
 
   /**

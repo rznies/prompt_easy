@@ -5,7 +5,8 @@
  * Acceptance criteria validation for all requirements in issue #2.
  */
 
-import { PromptEasyEngine, callLLM, LLMOptions } from '../src/improveEngine';
+import { PromptEasyEngine } from '../src/improveEngine';
+import { callLLM, LLMOptions } from '../src/shared/llmClient';
 
 describe('Phase 1a: LLM Interface Setup (Issue #2)', () => {
   let engine: PromptEasyEngine;
