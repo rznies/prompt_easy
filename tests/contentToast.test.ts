@@ -71,7 +71,7 @@ describe('Content Script Toast', () => {
     it('returns user-friendly message for RATE_LIMITED', () => {
       const error = new Error('Daily limit reached');
       (error as any).errorCode = 'RATE_LIMITED';
-      expect(getErrorMessage(error)).toBe('You have reached your free limit. Please try again later.');
+      expect(getErrorMessage(error)).toBe('This improve is rate limited. Please try again later.');
     });
 
     it('returns user-friendly message for KEY_NOT_READY', () => {
@@ -82,13 +82,19 @@ describe('Content Script Toast', () => {
 
     it('returns generic message for unknown errors', () => {
       const error = new Error('Something went wrong');
-      expect(getErrorMessage(error)).toBe('Improving failed — please try again.');
+      expect(getErrorMessage(error)).toBe('Improving failed. Please try again.');
     });
 
-    it('returns generic message for NETWORK_ERROR', () => {
+    it('returns user-friendly message for NETWORK_ERROR', () => {
       const error = new Error('Network error');
       (error as any).errorCode = 'NETWORK_ERROR';
-      expect(getErrorMessage(error)).toBe('Improving failed — please try again.');
+      expect(getErrorMessage(error)).toBe('Network error. Check your connection and try again.');
+    });
+
+    it('returns user-friendly message for INPUT_TOO_LONG', () => {
+      const error = new Error('Input too long');
+      (error as any).errorCode = 'INPUT_TOO_LONG';
+      expect(getErrorMessage(error)).toBe('Input exceeds 500 tokens. Shorten and try again.');
     });
   });
 });

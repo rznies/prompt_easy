@@ -1,5 +1,3 @@
-import { ConfigManager } from "./configManager";
-
 export enum LLMErrorType {
   AUTHENTICATION = 'AUTHENTICATION',
   RATE_LIMIT = 'RATE_LIMIT',
@@ -27,6 +25,7 @@ export interface LLMResult {
 export interface ClientOptions {
   provider: 'google' | 'openai';
   model: string;
+  apiKey: string;
   maxRetries?: number;
   signal?: AbortSignal;
 }
@@ -101,11 +100,11 @@ export class ReliableLLMClient {
   }
 
   private async resolveApiKey(): Promise<string> {
-    try {
-      return await ConfigManager.ensureKey();
-    } catch (error: any) {
-      throw new ReliableLLMError(LLMErrorType.AUTHENTICATION, `API key unavailable: ${error.message}`);
+    if (!this.options.apiKey) {
+      throw new ReliableLLMError(LLMErrorType.AUTHENTICATION, 'API key unavailable.');
     }
+
+    return this.options.apiKey;
   }
 
   private async callProvider(prompt: string, apiKey: string, systemInstruction?: string): Promise<LLMResult> {
@@ -155,7 +154,7 @@ export class ReliableLLMClient {
     return {
       text: text.trim(),
       usage: {
-        inputTokens: Math.ceil(prompt.length / 4),
+        inputTokens: Math.ceil((systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt).length / 4),
         outputTokens: Math.ceil(text.length / 4),
       },
     };

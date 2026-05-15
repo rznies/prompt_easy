@@ -56,12 +56,15 @@ Product is for power users. Free tier is a Trojan horse — gets extension insta
 - `onInstalled` discriminates by `reason`: `install` → fetch key only; `update` → purge legacy session key then fetch key; other reasons → no-op
 - Usage stats tracked internally only; no stats display or "Clear History" button in popup UI
 - Client-side device-scoped rate limiter: 3 free improves/day tracked in `chrome.storage.local` (`dailyUsageCount` + `usageDate`); soft limit for v1.0
-- `MessageResponse` extended with `errorCode` field (`RATE_LIMITED`, `KEY_NOT_READY`, `NETWORK_ERROR`, `UNKNOWN`) for UI differentiation
+- Improve errors are normalized through a shared module with stable `errorCode`, display message, and debug message fields (`RATE_LIMITED`, `KEY_NOT_READY`, `NETWORK_ERROR`, `INPUT_EMPTY`, `INPUT_TOO_LONG`, `AUTHENTICATION`, `UNKNOWN`)
 - Jest test environment switched to `jsdom` with `jest-fetch-mock`
 - In-flight config fetch Promise deduplication to prevent concurrent key fetches
 - Single-view popup: no settings view, no gear icon, no back button — minimalist improve-only interface
 - `ConfigManager` consolidates managed config (key + model) into single storage read; replaces `ApiKeyManager` and dead `SettingsStore` model methods
+- `PromptEasyStorage` owns typed storage keys and invariants for managed config, key fetch state, daily usage, usage stats, and legacy session cleanup
 - Gemini REST API uses `systemInstruction` field for system prompt, `contents` array for user prompt
+- Template rendering is a first-class pure module; Improve mode owns strict ROLE/TASK/OUTPUT FORMAT/CONSTRAINTS sections, Language preservation, and named Context Cards injection
+- `PromptEasyEngine` is the Improve mode execution module: it owns validation, free-tier rate limiting, key readiness healing, Template rendering, LLM Adapter execution, cancellation wiring, and usage stats
 - `fetch()` timeouts use `AbortSignal.timeout()` for proper request cancellation
 - Content script `alert()` replaced with inline non-blocking toast near Improve button
 - `document.execCommand('insertText')` replaced with modern `InputEvent` dispatch for contenteditable composers
@@ -71,6 +74,7 @@ Product is for power users. Free tier is a Trojan horse — gets extension insta
 - COGS: ~$0.12/free user/month (40 improves)
 - Fallback selector list per site + MutationObserver for DOM changes
 - Floating button fallback if injection fails
+- `ComposerSession` owns active AI site Adapter lookup, composer discovery, prompt read/write, focus behavior, and generic fallback composer handling
 - Site selectors:
   - ChatGPT: `textarea#prompt-textarea`, `div[contenteditable]`
   - Claude: `div[contenteditable="true"].ProseMirror`

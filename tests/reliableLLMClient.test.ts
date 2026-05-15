@@ -1,6 +1,5 @@
 import fetchMock from 'jest-fetch-mock';
-import { ReliableLLMClient, ReliableLLMError, LLMErrorType } from '../src/shared/reliableLLMClient';
-import { ConfigManager } from '../src/shared/configManager';
+import { ReliableLLMClient, LLMErrorType, type ClientOptions } from '../src/shared/reliableLLMClient';
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=test-api-key';
 
@@ -13,23 +12,19 @@ afterAll(() => {
   (AbortSignal as any).timeout = originalAbortSignalTimeout;
 });
 
+function createClient(options: Partial<ClientOptions> = {}) {
+  return new ReliableLLMClient({
+    provider: 'google',
+    model: 'gemini-2.0-flash',
+    apiKey: 'test-api-key',
+    ...options,
+  });
+}
+
 describe('ReliableLLMClient (raw fetch)', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
-    ConfigManager.resetForTest();
     jest.clearAllMocks();
-
-    (global as any).chrome = {
-      storage: {
-        local: {
-          get: jest.fn((keys, callback) => callback({
-            managedConfig: { apiKey: 'test-api-key', model: 'gemini-2.0-flash', version: '1.0.0' },
-          })),
-          set: jest.fn((data, callback) => callback()),
-        },
-      },
-      runtime: { lastError: undefined },
-    };
   });
 
   describe('execute() — payload shape', () => {
@@ -38,8 +33,8 @@ describe('ReliableLLMClient (raw fetch)', () => {
         candidates: [{ content: { parts: [{ text: 'Improved prompt' }] } }],
       }));
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
-      await client.execute('Make this better', { systemInstruction: 'You are a prompt engineer.' });
+      const client = createClient();
+      const result = await client.execute('Make this better', { systemInstruction: 'You are a prompt engineer.' });
 
       expect(fetchMock).toHaveBeenCalledWith(GEMINI_URL, expect.objectContaining({
         method: 'POST',
@@ -51,6 +46,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
         contents: [{ parts: [{ text: 'Make this better' }] }],
         systemInstruction: { parts: [{ text: 'You are a prompt engineer.' }] },
       });
+      expect(result.usage.inputTokens).toBe(Math.ceil('You are a prompt engineer.\n\nMake this better'.length / 4));
     });
 
     it('works without systemInstruction', async () => {
@@ -58,7 +54,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
         candidates: [{ content: { parts: [{ text: 'Result' }] } }],
       }));
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
+      const client = createClient();
       await client.execute('Hello');
 
       const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
@@ -71,7 +67,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('normalizes 400 to AUTHENTICATION error', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ error: { message: 'Bad request', status: 'INVALID_ARGUMENT' } }), { status: 400 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
+      const client = createClient();
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -83,7 +79,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('normalizes 401 to AUTHENTICATION error', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ error: { message: 'API key invalid', status: 'UNAUTHENTICATED' } }), { status: 401 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
+      const client = createClient();
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -95,7 +91,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('normalizes 403 to AUTHENTICATION error', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ error: { message: 'Forbidden' } }), { status: 403 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
+      const client = createClient();
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -107,7 +103,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('normalizes 429 to RATE_LIMIT error', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ error: { message: 'Rate limited' } }), { status: 429 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash', maxRetries: 0 });
+      const client = createClient({ maxRetries: 0 });
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -119,7 +115,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('normalizes 500 to NETWORK error', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ error: { message: 'Internal error' } }), { status: 500 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash', maxRetries: 0 });
+      const client = createClient({ maxRetries: 0 });
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -131,7 +127,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('normalizes 502 to NETWORK error', async () => {
       fetchMock.mockResponseOnce('', { status: 502 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash', maxRetries: 0 });
+      const client = createClient({ maxRetries: 0 });
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -143,7 +139,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('normalizes unknown status to UNKNOWN error', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ error: { message: 'Weird' } }), { status: 418 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
+      const client = createClient();
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -159,7 +155,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
         .mockResponseOnce(JSON.stringify({ error: { message: 'Server error' } }), { status: 500 })
         .mockResponseOnce(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Retry worked' }] } }] }));
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash', maxRetries: 1 });
+      const client = createClient({ maxRetries: 1 });
       const result = await client.execute('test');
 
       expect(result.text).toBe('Retry worked');
@@ -169,7 +165,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('does NOT retry on AUTHENTICATION error', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ error: { message: 'Bad key' } }), { status: 401 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash', maxRetries: 1 });
+      const client = createClient({ maxRetries: 1 });
       await expect(client.execute('test')).rejects.toThrow();
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
@@ -179,7 +175,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
         .mockResponseOnce(JSON.stringify({ error: { message: 'Error' } }), { status: 500 })
         .mockResponseOnce(JSON.stringify({ error: { message: 'Error again' } }), { status: 500 });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash', maxRetries: 1 });
+      const client = createClient({ maxRetries: 1 });
       try {
         await client.execute('test');
         fail('Expected to throw');
@@ -196,9 +192,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
       const controller = new AbortController();
       controller.abort();
 
-      const client = new ReliableLLMClient({
-        provider: 'google',
-        model: 'gemini-2.0-flash',
+      const client = createClient({
         signal: controller.signal,
       });
 
@@ -227,7 +221,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
         });
       });
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash', maxRetries: 0 });
+      const client = createClient({ maxRetries: 0 });
       const result = client.execute('test');
       await expect(result).rejects.toThrow();
 
@@ -242,7 +236,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
         candidates: [{ content: { parts: [{ text: 'Hello world' }] } }],
       }));
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
+      const client = createClient();
       const result = await client.execute('test');
 
       expect(result.text).toBe('Hello world');
@@ -253,7 +247,7 @@ describe('ReliableLLMClient (raw fetch)', () => {
     it('throws on empty response', async () => {
       fetchMock.mockResponseOnce(JSON.stringify({ candidates: [] }));
 
-      const client = new ReliableLLMClient({ provider: 'google', model: 'gemini-2.0-flash' });
+      const client = createClient();
       await expect(client.execute('test')).rejects.toThrow('Empty response');
     });
   });

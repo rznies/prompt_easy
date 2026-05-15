@@ -6,11 +6,15 @@
  */
 
 import { ConfigManager } from './shared/configManager';
+import { ImproveError, normalizeImproveError } from './shared/improveError';
+import { RateLimiter } from './shared/rateLimiter';
 import { SettingsStore } from './shared/settingsStore';
 import { ReliableLLMClient, LLMResult } from './shared/reliableLLMClient';
+import { renderImproveTemplate, type ContextCard } from './template';
 
 export interface ImproveOptions {
   context?: string;
+  contextCards?: ContextCard[];
   signal?: AbortSignal;
 }
 
@@ -34,62 +38,64 @@ export class PromptEasyEngine {
    * @returns A promise that resolves to the improved prompt string
    */
   async improve(prompt: string, options?: ImproveOptions): Promise<string> {
-    this.validatePrompt(prompt);
+    try {
+      this.validatePrompt(prompt);
+      await RateLimiter.checkAndIncrement();
 
-    // Resolve model from managed config
-    const managedConfig = await ConfigManager.getManagedConfig();
-    const activeModel = managedConfig?.model || 'gemini-2.0-flash';
+      const managedConfig = await this.getReadyConfig();
+      const activeModel = managedConfig.model || 'gemini-2.0-flash';
 
-    // Create a reliable client for execution
-    const client = new ReliableLLMClient({
-      provider: this.provider,
-      model: activeModel,
-      signal: options?.signal
-    });
+      const client = new ReliableLLMClient({
+        provider: this.provider,
+        model: activeModel,
+        apiKey: managedConfig.apiKey,
+        signal: options?.signal
+      });
 
-    const systemPrompt = this.buildSystemPrompt(options?.context);
-    const fullPrompt = `${systemPrompt}\n\nUSER PROMPT:\n${prompt}`;
+      const systemInstruction = renderImproveTemplate({
+        context: options?.context,
+        contextCards: options?.contextCards,
+      });
 
-    // Execute via Reliable Client
-    const result: LLMResult = await client.execute(fullPrompt);
+      const result: LLMResult = await client.execute(prompt, { systemInstruction });
 
-    // Persist usage stats (Domain logic)
-    SettingsStore.updateUsage(result.usage.inputTokens, result.usage.outputTokens).catch(console.error);
+      SettingsStore.updateUsage(result.usage.inputTokens, result.usage.outputTokens).catch(console.error);
 
-    return result.text;
+      return result.text;
+    } catch (error) {
+      throw normalizeImproveError(error);
+    }
   }
 
   private validatePrompt(prompt: string): void {
     if (!prompt || prompt.trim().length === 0) {
-      throw new Error('Prompt cannot be empty');
+      throw new ImproveError('INPUT_EMPTY', 'Prompt cannot be empty');
     }
 
     const estimatedTokens = Math.ceil(prompt.length / 4);
     if (estimatedTokens > this.MAX_INPUT_TOKENS) {
-      throw new Error(
+      throw new ImproveError(
+        'INPUT_TOO_LONG',
         `Input too long (estimated ${estimatedTokens} tokens). Max is ${this.MAX_INPUT_TOKENS}.`
       );
     }
   }
 
-  private buildSystemPrompt(userContext?: string): string {
-    const contextSection = userContext ? `\nOPTIONAL CONTEXT: ${userContext}` : '';
+  private async getReadyConfig(): Promise<{ apiKey: string; model?: string }> {
+    const config = await ConfigManager.getManagedConfig();
+    if (config?.apiKey) {
+      return config;
+    }
 
-    return `You are an expert prompt engineer. Your task is to improve the user's vague prompt into a structured, effective prompt.
-
-OUTPUT FORMAT:
-Improve the prompt by adding:
-1. ROLE: Define a specific persona or expertise the AI should adopt
-2. TASK: Clarify the exact deliverable or action
-3. OUTPUT FORMAT: Specify format, length, tone
-4. CONSTRAINTS: Specify any specific requirements or limitations
-${userContext ? '5. CONTEXT: Inject the provided user context' : ''}
-
-IMPORTANT:
-- Preserve the original language. Do NOT translate.
-- Return ONLY the improved prompt text.
-- Target output around 200 tokens.
-${contextSection}`;
+    try {
+      const apiKey = await ConfigManager.ensureKey();
+      const healedConfig = await ConfigManager.getManagedConfig();
+      return {
+        apiKey,
+        model: healedConfig?.model,
+      };
+    } catch (error: any) {
+      throw new ImproveError('KEY_NOT_READY', `API key not ready: ${error.message}`);
+    }
   }
 }
-

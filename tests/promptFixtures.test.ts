@@ -1,6 +1,7 @@
 import { PromptEasyEngine } from '../src/improveEngine';
 import { ReliableLLMClient } from '../src/shared/reliableLLMClient';
 import { ConfigManager } from '../src/shared/configManager';
+import { RateLimiter } from '../src/shared/rateLimiter';
 import { promptFixtures } from './fixtures/promptFixtures';
 
 // Mock ReliableLLMClient
@@ -21,6 +22,12 @@ jest.mock('../src/shared/configManager', () => ({
   }
 }));
 
+jest.mock('../src/shared/rateLimiter', () => ({
+  RateLimiter: {
+    checkAndIncrement: jest.fn().mockResolvedValue(undefined)
+  }
+}));
+
 // Mock SettingsStore for usage tracking
 jest.mock('../src/shared/settingsStore', () => ({
   SettingsStore: {
@@ -34,6 +41,7 @@ describe('Prompt Fixtures Validation', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (RateLimiter.checkAndIncrement as jest.Mock).mockResolvedValue(undefined);
     engine = new PromptEasyEngine();
     mockExecute = jest.fn().mockImplementation(async (fullPrompt: string) => ({
       text: `ROLE: Expert assistant\nTASK: Respond to fixture\nOUTPUT FORMAT: Clear and structured text\nCONSTRAINTS: Be concise`,
@@ -59,14 +67,14 @@ describe('Prompt Fixtures Validation', () => {
 
     it('should verify input language preservation rule is in system prompt', async () => {
       await engine.improve('Bonjour le monde');
-      const fullPrompt = mockExecute.mock.calls[0][0];
-      expect(fullPrompt).toContain('Preserve the original language');
+      const systemInstruction = mockExecute.mock.calls[0][1]?.systemInstruction;
+      expect(systemInstruction).toContain('Preserve the original language');
     });
 
     it('should verify target length instruction is included', async () => {
       await engine.improve('Some short text');
-      const fullPrompt = mockExecute.mock.calls[0][0];
-      expect(fullPrompt).toContain('Target output around 200 tokens');
+      const systemInstruction = mockExecute.mock.calls[0][1]?.systemInstruction;
+      expect(systemInstruction).toContain('Target output around 200 tokens');
     });
   });
 });

@@ -1,6 +1,7 @@
 import { PromptEasyEngine } from '../src/improveEngine';
 import { ReliableLLMClient, LLMErrorType, ReliableLLMError } from '../src/shared/reliableLLMClient';
 import { ConfigManager } from '../src/shared/configManager';
+import { RateLimiter } from '../src/shared/rateLimiter';
 
 // Mock ReliableLLMClient
 jest.mock('../src/shared/reliableLLMClient', () => {
@@ -34,12 +35,19 @@ jest.mock('../src/shared/configManager', () => ({
   }
 }));
 
+jest.mock('../src/shared/rateLimiter', () => ({
+  RateLimiter: {
+    checkAndIncrement: jest.fn().mockResolvedValue(undefined)
+  }
+}));
+
 describe('Error Handling (Refactored)', () => {
   let engine: PromptEasyEngine;
   let mockExecute: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (RateLimiter.checkAndIncrement as jest.Mock).mockResolvedValue(undefined);
     engine = new PromptEasyEngine();
     mockExecute = jest.fn();
     (ReliableLLMClient as jest.Mock).mockImplementation(() => ({

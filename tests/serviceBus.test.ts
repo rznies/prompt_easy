@@ -43,7 +43,9 @@ describe('ServiceBus Error Codes', () => {
       expect(postMessageMock).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          errorCode: 'RATE_LIMITED'
+          errorCode: 'RATE_LIMITED',
+          error: 'This improve is rate limited. Please try again later.',
+          debugMessage: 'Daily limit reached',
         })
       );
     });
@@ -80,11 +82,17 @@ describe('ServiceBus Error Codes', () => {
         });
       });
 
-      onMessageCallbacks[0]({ success: false, error: 'Daily limit reached', errorCode: 'RATE_LIMITED' });
+      onMessageCallbacks[0]({
+        success: false,
+        error: 'This improve is rate limited. Please try again later.',
+        errorCode: 'RATE_LIMITED',
+        debugMessage: 'Daily limit reached',
+      });
 
       await expect(improvePromise).rejects.toMatchObject({
-        message: 'Daily limit reached',
-        errorCode: 'RATE_LIMITED'
+        message: 'This improve is rate limited. Please try again later.',
+        errorCode: 'RATE_LIMITED',
+        debugMessage: 'Daily limit reached',
       });
     });
 

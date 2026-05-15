@@ -1,16 +1,10 @@
+import { getImproveErrorDisplayMessage } from '../shared/improveError';
+
 const TOAST_ID = 'prompt-easy-toast';
 const TOAST_DURATION_MS = 3000;
 
-const ERROR_MESSAGES: Record<string, string> = {
-  RATE_LIMITED: 'You have reached your free limit. Please try again later.',
-  KEY_NOT_READY: 'Setting up your API key... please try again in a moment.'
-};
-
-const DEFAULT_ERROR_MESSAGE = 'Improving failed — please try again.';
-
 export function getErrorMessage(error: unknown): string {
-  const errorCode = (error as any)?.errorCode;
-  return ERROR_MESSAGES[errorCode] || DEFAULT_ERROR_MESSAGE;
+  return getImproveErrorDisplayMessage(error);
 }
 
 export function showToast(referenceElement: HTMLElement, message: string): void {

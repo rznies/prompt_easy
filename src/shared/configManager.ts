@@ -1,20 +1,13 @@
-import { StorageWrapper } from './storage';
 import { CONFIG_ENDPOINT_URL } from './config';
+import { PromptEasyStorage, type ManagedConfig } from './promptEasyStorage';
 
-export interface ManagedConfig {
-  apiKey: string;
-  model: string;
-  version: string;
-}
+export type { ManagedConfig };
 
 export class ConfigManager {
-  private static readonly STORAGE_KEY = 'managedConfig';
-  private static readonly FAILED_FLAG_KEY = 'keyFetchFailed';
   private static pendingFetch: Promise<ManagedConfig> | null = null;
 
   static async getManagedConfig(): Promise<ManagedConfig | null> {
-    const config = await StorageWrapper.getLocal(this.STORAGE_KEY);
-    return config || null;
+    return PromptEasyStorage.getManagedConfig();
   }
 
   static async ensureKey(): Promise<string> {
@@ -44,10 +37,10 @@ export class ConfigManager {
         throw new Error(`HTTP ${response.status}`);
       }
       const config = (await response.json()) as ManagedConfig;
-      await StorageWrapper.setLocal(this.STORAGE_KEY, config);
+      await PromptEasyStorage.setManagedConfig(config);
       return config;
     } catch (error: any) {
-      await StorageWrapper.setLocal(this.FAILED_FLAG_KEY, true);
+      await PromptEasyStorage.markKeyFetchFailed();
       throw new Error(`Failed to fetch API key configuration: ${error.message}`);
     }
   }

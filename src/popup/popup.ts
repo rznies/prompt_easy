@@ -1,5 +1,6 @@
 import { ServiceBus } from '../shared/serviceBus';
 import { ConfigManager } from '../shared/configManager';
+import { getImproveErrorDisplayMessage } from '../shared/improveError';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const improveBtn = document.getElementById('improveBtn') as HTMLButtonElement;
@@ -52,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       copyBtn.disabled = false;
       showToast('Prompt improved successfully!');
     } catch (error: any) {
-      showToast(error.message || 'An unexpected error occurred.', 'error');
+      showToast(getImproveErrorDisplayMessage(error), 'error');
     } finally {
       loadingOverlay.classList.add('hidden');
       improveBtn.disabled = !isKeyReady || inputPrompt.value.trim().length === 0;
@@ -78,7 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     isKeyReady = true;
     updateStats();
   } catch (error: any) {
-    showToast(`API key not ready: ${error.message}`, 'error');
+    showToast(getImproveErrorDisplayMessage({ errorCode: 'KEY_NOT_READY', message: error.message }), 'error');
     improveBtn.disabled = true;
   }
 });

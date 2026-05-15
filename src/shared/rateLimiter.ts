@@ -1,4 +1,4 @@
-import { StorageWrapper } from './storage';
+import { PromptEasyStorage } from './promptEasyStorage';
 
 export class RateLimitError extends Error {
   errorCode: 'RATE_LIMITED';
@@ -12,29 +12,20 @@ export class RateLimitError extends Error {
 
 export class RateLimiter {
   private static readonly DAILY_LIMIT = 3;
-  private static readonly USAGE_COUNT_KEY = 'dailyUsageCount';
-  private static readonly USAGE_DATE_KEY = 'usageDate';
 
   static async checkAndIncrement(): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
-    const [count, savedDate] = await Promise.all([
-      StorageWrapper.getLocal(this.USAGE_COUNT_KEY),
-      StorageWrapper.getLocal(this.USAGE_DATE_KEY),
-    ]);
+    const usage = await PromptEasyStorage.getDailyUsage();
 
-    if (savedDate !== today) {
-      await Promise.all([
-        StorageWrapper.setLocal(this.USAGE_COUNT_KEY, 1),
-        StorageWrapper.setLocal(this.USAGE_DATE_KEY, today),
-      ]);
+    if (usage.date !== today) {
+      await PromptEasyStorage.setDailyUsage({ count: 1, date: today });
       return;
     }
 
-    const currentCount = count || 0;
-    if (currentCount >= this.DAILY_LIMIT) {
+    if (usage.count >= this.DAILY_LIMIT) {
       throw new RateLimitError('Daily improve limit reached. Try again tomorrow.');
     }
 
-    await StorageWrapper.setLocal(this.USAGE_COUNT_KEY, currentCount + 1);
+    await PromptEasyStorage.setDailyUsage({ count: usage.count + 1, date: today });
   }
 }

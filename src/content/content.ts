@@ -1,5 +1,5 @@
 import { ServiceBus } from '../shared/serviceBus';
-import { getActiveAdapter } from './adapters/registry';
+import { ComposerSession } from './composerSession';
 import { showToast, getErrorMessage } from './toast';
 
 console.log('Prompt Easy: Content script initialized with ServiceBus');
@@ -63,11 +63,9 @@ function injectFloatingButton() {
   button.appendChild(closeBtn);
 
   button.onclick = async () => {
-    const adapter = getActiveAdapter();
-    const composer = (adapter?.getComposer() || document.querySelector('textarea, [contenteditable="true"]')) as HTMLElement;
-    
-    const text = (adapter && composer) ? adapter.getText(composer) : (composer ? (composer as any).value || (composer as HTMLElement).innerText : '');
-    
+    const session = ComposerSession.forFallback();
+    const text = session?.readPrompt().trim() || '';
+
     if (!text.trim()) {
       showToast(button, 'Could not find prompt text. Please type something first.');
       return;
@@ -79,17 +77,8 @@ function injectFloatingButton() {
 
       const result = await ServiceBus.improvePrompt(text);
 
-      if (adapter && composer) {
-        adapter.setText(composer, result);
-        (composer as HTMLElement).focus();
-      } else if (composer) {
-        if (composer instanceof HTMLTextAreaElement) composer.value = result;
-        else (composer as HTMLElement).innerText = result;
-        (composer as HTMLElement).focus();
-      } else {
-        navigator.clipboard.writeText(result);
-        showToast(button, 'Improved prompt copied to clipboard!');
-      }
+      session!.writePrompt(result);
+      session!.focus();
     } catch (error: any) {
       showToast(button, getErrorMessage(error));
     } finally {
@@ -106,14 +95,8 @@ function injectFloatingButton() {
  * Main injection logic using Site Adapters
  */
 function injectImproveButton() {
-  const adapter = getActiveAdapter();
-  if (!adapter) {
-    injectFloatingButton();
-    return;
-  }
-
-  const composer = adapter.getComposer() as HTMLElement;
-  if (!composer) {
+  const session = ComposerSession.forActiveSite();
+  if (!session) {
     const oldBtn = document.getElementById(BUTTON_ID);
     if (oldBtn) oldBtn.remove();
     injectFloatingButton();
@@ -123,7 +106,7 @@ function injectImproveButton() {
   const fallback = document.getElementById(FALLBACK_ID);
   if (fallback) fallback.remove();
 
-  const container = composer.parentElement;
+  const container = session.container;
   if (!container) return;
 
   const existingBtn = document.getElementById(BUTTON_ID);
@@ -135,7 +118,7 @@ function injectImproveButton() {
   button.id = BUTTON_ID;
   button.type = 'button';
   button.innerHTML = IMPROVE_ICON;
-  button.title = `Improve Prompt on ${adapter.name} (Prompt Easy)`;
+  button.title = session.buttonTitle;
   
   Object.assign(button.style, {
     position: 'absolute',
@@ -152,14 +135,14 @@ function injectImproveButton() {
     justifyContent: 'center',
     fontSize: '16px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    ...adapter.getButtonStyles()
+    ...session.buttonStyles
   });
 
   button.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const text = adapter.getText(composer).trim();
+    const text = session.readPrompt().trim();
     if (!text) return;
 
     try {
@@ -167,8 +150,8 @@ function injectImproveButton() {
       button.disabled = true;
 
       const result = await ServiceBus.improvePrompt(text);
-      adapter.setText(composer, result);
-      composer.focus();
+      session.writePrompt(result);
+      session.focus();
     } catch (error: any) {
       showToast(button, getErrorMessage(error));
     } finally {

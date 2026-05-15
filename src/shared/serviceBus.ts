@@ -1,3 +1,5 @@
+import { normalizeImproveError, type ImproveErrorCode } from './improveError';
+
 export enum MessageType {
   IMPROVE_PROMPT = 'IMPROVE_PROMPT',
   PING = 'PING'
@@ -12,7 +14,8 @@ export interface MessageResponse<T = any> {
   success: boolean;
   data?: T;
   error?: string;
-  errorCode?: 'RATE_LIMITED' | 'KEY_NOT_READY' | 'NETWORK_ERROR' | 'UNKNOWN';
+  errorCode?: ImproveErrorCode;
+  debugMessage?: string;
 }
 
 /**
@@ -32,6 +35,7 @@ export class ServiceBus {
     if (!response.success) {
       const error = new Error(response.error || 'Failed to improve prompt');
       (error as any).errorCode = response.errorCode;
+      (error as any).debugMessage = response.debugMessage;
       throw error;
     }
 
@@ -94,8 +98,13 @@ export class ServiceBus {
               // Caller disconnected, no need to respond
               return;
             }
-            const errorCode = (error as any).errorCode as MessageResponse['errorCode'] | undefined;
-            port.postMessage({ success: false, error: error.message || String(error), errorCode });
+            const improveError = normalizeImproveError(error);
+            port.postMessage({
+              success: false,
+              error: improveError.displayMessage,
+              errorCode: improveError.errorCode,
+              debugMessage: improveError.debugMessage,
+            });
           });
       });
     });
