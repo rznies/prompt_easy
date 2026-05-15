@@ -1,5 +1,5 @@
 // To support both browser and Node.js environments (for Jest)
-const cryptoObj = typeof crypto !== 'undefined' ? crypto : require('crypto').webcrypto;
+const cryptoObj = typeof crypto !== 'undefined' ? crypto : (globalThis as any).crypto;
 
 /**
  * Generate a new AES-GCM session key

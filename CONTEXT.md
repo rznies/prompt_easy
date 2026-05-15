@@ -44,8 +44,8 @@ Product is for power users. Free tier is a Trojan horse — gets extension insta
 ## Technical
 
 - Client-side with hybrid API key model:
-  - v1: BYOK only (users bring their OpenAI API key)
-  - v2: 10 free improves/month on our key, then BYOK or upgrade to Pro
+  - v1: BYOK only (users bring their Gemini API key)
+  - v2: 3 free improves/day on our key, then BYOK or upgrade to Pro
 - LLM cost: ~$0.003 per improve (GPT-4o-mini, 500 tokens in/out)
 - COGS: ~$0.12/free user/month (40 improves)
 - Fallback selector list per site + MutationObserver for DOM changes
@@ -69,8 +69,8 @@ Primary: **communities + YouTube, not store browse.**
 
 | Tier | Price | Features |
 |------|-------|----------|
-| Free | $0 | 3/day (21/week), no library, no memory, 10 improves on our key |
-| Pro | $9/mo | Unlimited, 100-prompt library, memory, 3 custom templates |
+| Free | $0 | BYOK: Unlimited improves. (v2: 3/day on our key), no library, no memory |
+| Pro | $9/mo | 100-prompt library, memory, 3 custom templates |
 | Team | $19/mo | + team sync (5 seats), priority models |
 
 Teams >5: $7/seat/month

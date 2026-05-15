@@ -1,7 +1,7 @@
 import { StorageWrapper } from './storage';
 import { generateSessionKey, encryptKey, decryptKey } from './encryption';
 
-const cryptoObj = typeof crypto !== 'undefined' ? crypto : require('crypto').webcrypto;
+const cryptoObj = typeof crypto !== 'undefined' ? crypto : (globalThis as any).crypto;
 
 export class ApiKeyManager {
   static async storeKey(apiKey: string): Promise<void> {

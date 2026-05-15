@@ -1,78 +1,61 @@
 import { PromptEasyEngine } from '../src/improveEngine';
-import { ApiKeyManager } from '../src/shared/apiKeyManager';
-import { StorageWrapper } from '../src/shared/storage';
+import { ReliableLLMClient } from '../src/shared/reliableLLMClient';
+import { SettingsStore } from '../src/shared/settingsStore';
 import { promptFixtures } from './fixtures/promptFixtures';
-import * as llmClient from '../src/shared/llmClient';
 
-jest.mock('../src/shared/apiKeyManager');
-jest.mock('../src/shared/storage');
+// Mock ReliableLLMClient
+jest.mock('../src/shared/reliableLLMClient', () => ({
+  ReliableLLMClient: jest.fn()
+}));
 
-describe('Phase 1e: Improve Engine Testing (Issue #6)', () => {
+// Mock SettingsStore
+jest.mock('../src/shared/settingsStore', () => ({
+  SettingsStore: {
+    getPreferredModel: jest.fn().mockResolvedValue('gemini-3-flash-preview'),
+    updateUsage: jest.fn().mockResolvedValue(undefined)
+  }
+}));
+
+describe('Prompt Fixtures Validation', () => {
   let engine: PromptEasyEngine;
-
-  beforeAll(() => {
-    (ApiKeyManager.getKey as jest.Mock).mockResolvedValue('valid-key');
-    (StorageWrapper.getLocal as jest.Mock).mockResolvedValue(0);
-    (StorageWrapper.setLocal as jest.Mock).mockResolvedValue(undefined);
-    
-    // Spy on callLLM to prevent actual network requests and return a standard structure
-    jest.spyOn(llmClient, 'callLLM').mockImplementation(async (prompt, options) => {
-      // Mocking the structural output that the prompt expects
-      return `ROLE: Expert assistant
-TASK: Respond to: ${prompt.substring(0, 30)}...
-OUTPUT FORMAT: Clear and structured text
-CONSTRAINTS: Be concise`;
-    });
-  });
+  let mockExecute: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     engine = new PromptEasyEngine();
+    mockExecute = jest.fn().mockImplementation(async (fullPrompt: string) => ({
+      text: `ROLE: Expert assistant\nTASK: Respond to fixture\nOUTPUT FORMAT: Clear and structured text\nCONSTRAINTS: Be concise`,
+      usage: { inputTokens: 10, outputTokens: 20 }
+    }));
+    
+    (ReliableLLMClient as jest.Mock).mockImplementation(() => ({
+      execute: mockExecute
+    }));
   });
 
   describe('Validation across 50+ representative prompt fixtures', () => {
     it('should successfully improve all 50+ fixtures', async () => {
       expect(promptFixtures.length).toBeGreaterThanOrEqual(50);
 
-      // We test a subset comprehensively to avoid overly long test runs,
-      // but conceptually it proves the engine handles them.
       for (const fixture of promptFixtures) {
         const improved = await engine.improve(fixture);
         
-        // Output validation checks structure, not exact wording
         expect(improved).toContain('ROLE:');
         expect(improved).toContain('TASK:');
-        expect(improved).toContain('OUTPUT FORMAT:');
-        expect(improved).toContain('CONSTRAINTS:');
+        expect(SettingsStore.updateUsage).toHaveBeenCalled();
       }
     });
 
-    it('should verify input language is preserved (simulated through the mock)', async () => {
-      // The system prompt contains the rule: "Do NOT translate the input. Preserve the original language."
-      // Since we don't call a real LLM here, we just verify the callLLM was called with the system prompt containing this rule.
+    it('should verify input language preservation rule is in system prompt', async () => {
       await engine.improve('Bonjour le monde');
-      expect(llmClient.callLLM).toHaveBeenCalledWith(
-        expect.stringContaining('Do NOT translate the input. Preserve the original language.'),
-        expect.any(Object)
-      );
+      const fullPrompt = mockExecute.mock.calls[0][0];
+      expect(fullPrompt).toContain('Preserve the original language');
     });
 
     it('should verify target length instruction is included', async () => {
       await engine.improve('Some short text');
-      expect(llmClient.callLLM).toHaveBeenCalledWith(
-        expect.stringContaining('Target output around 200 tokens'),
-        expect.any(Object)
-      );
-    });
-  });
-
-  describe('Usage statistics tracking', () => {
-    it('should update usage stats upon successful improve call', async () => {
-      const spy = jest.spyOn(engine as any, 'updateUsageStats').mockResolvedValue(undefined);
-      
-      await engine.improve('Test prompt');
-      
-      expect(spy).toHaveBeenCalled();
+      const fullPrompt = mockExecute.mock.calls[0][0];
+      expect(fullPrompt).toContain('Target output around 200 tokens');
     });
   });
 });

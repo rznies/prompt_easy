@@ -1,15 +1,18 @@
-import { addMessageListener } from '../shared/messaging';
+import { ServiceBus, MessageType, ImprovePromptPayload } from '../shared/serviceBus';
+import { PromptEasyEngine } from '../improveEngine';
 
-// Log service worker start
-console.log('Prompt Easy: Service Worker initialized');
+console.log('Prompt Easy: Service Worker initialized with ServiceBus');
 
-addMessageListener((message, sender, sendResponse) => {
-  console.log('Received message:', message);
-  
-  if (message.type === 'PING') {
-    sendResponse({ success: true, data: 'PONG' });
+ServiceBus.addListener(async (type, payload) => {
+  if (type === MessageType.PING) {
+    return 'PONG';
   }
 
-  // Handle async response
-  return true;
+  if (type === MessageType.IMPROVE_PROMPT) {
+    const { text, context } = payload as ImprovePromptPayload;
+    const engine = new PromptEasyEngine();
+    return await engine.improve(text, { context });
+  }
+
+  throw new Error(`Unhandled message type: ${type}`);
 });
