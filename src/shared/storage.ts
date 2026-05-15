@@ -46,4 +46,16 @@ export class StorageWrapper {
       });
     });
   }
+
+  static removeSession(key: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      chrome.storage.session.remove(key, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
 }

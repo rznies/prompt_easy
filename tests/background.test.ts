@@ -27,6 +27,14 @@ describe('Background Service Worker', () => {
       runtime: {
         onMessage: {
           addListener: jest.fn()
+        },
+        onInstalled: {
+          addListener: jest.fn()
+        }
+      },
+      alarms: {
+        onAlarm: {
+          addListener: jest.fn()
         }
       }
     };
