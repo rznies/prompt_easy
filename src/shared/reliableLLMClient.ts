@@ -1,4 +1,4 @@
-import { ApiKeyManager } from "./apiKeyManager";
+import { ConfigManager } from "./configManager";
 
 export enum LLMErrorType {
   AUTHENTICATION = 'AUTHENTICATION',
@@ -102,12 +102,9 @@ export class ReliableLLMClient {
 
   private async resolveApiKey(): Promise<string> {
     try {
-      return await ApiKeyManager.getKey();
+      return await ConfigManager.ensureKey();
     } catch (error: any) {
-      if (error.message.includes('Session key lost') || error.message.includes('No API key stored')) {
-        throw new ReliableLLMError(LLMErrorType.AUTHENTICATION, 'API key missing or session expired.');
-      }
-      throw new ReliableLLMError(LLMErrorType.AUTHENTICATION, `Auth failed: ${error.message}`);
+      throw new ReliableLLMError(LLMErrorType.AUTHENTICATION, `API key unavailable: ${error.message}`);
     }
   }
 

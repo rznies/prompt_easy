@@ -1,5 +1,6 @@
 import fetchMock from 'jest-fetch-mock';
 import { ReliableLLMClient, ReliableLLMError, LLMErrorType } from '../src/shared/reliableLLMClient';
+import { ConfigManager } from '../src/shared/configManager';
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=test-api-key';
 
@@ -15,15 +16,15 @@ afterAll(() => {
 describe('ReliableLLMClient (raw fetch)', () => {
   beforeEach(() => {
     fetchMock.resetMocks();
+    ConfigManager.resetForTest();
     jest.clearAllMocks();
 
     (global as any).chrome = {
       storage: {
-        session: {
-          get: jest.fn((keys, callback) => callback({ apiKey: 'test-api-key' })),
-        },
         local: {
-          get: jest.fn((keys, callback) => callback({})),
+          get: jest.fn((keys, callback) => callback({
+            managedConfig: { apiKey: 'test-api-key', model: 'gemini-2.0-flash', version: '1.0.0' },
+          })),
           set: jest.fn((data, callback) => callback()),
         },
       },
