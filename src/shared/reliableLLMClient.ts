@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { ApiKeyManager } from "./apiKeyManager";
 
 export enum LLMErrorType {
@@ -32,6 +31,22 @@ export interface ClientOptions {
   signal?: AbortSignal;
 }
 
+export interface ExecuteOptions {
+  systemInstruction?: string;
+}
+
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text: string }>;
+    };
+  }>;
+  error?: {
+    message?: string;
+    status?: string;
+  };
+}
+
 export class ReliableLLMClient {
   private readonly maxRetries: number;
 
@@ -39,10 +54,9 @@ export class ReliableLLMClient {
     this.maxRetries = options.maxRetries ?? 1;
   }
 
-  async execute(prompt: string): Promise<LLMResult> {
+  async execute(prompt: string, executeOptions?: ExecuteOptions): Promise<LLMResult> {
     let attempts = 0;
-    
-    // Resolve credential inside the client (Option B)
+    let lastError: ReliableLLMError | null = null;
     const apiKey = await this.resolveApiKey();
 
     while (attempts <= this.maxRetries) {
@@ -51,7 +65,7 @@ export class ReliableLLMClient {
       }
 
       try {
-        const result = await this.callProvider(prompt, apiKey);
+        const result = await this.callProvider(prompt, apiKey, executeOptions?.systemInstruction);
         return result;
       } catch (error: any) {
         if (this.options.signal?.aborted) {
@@ -59,10 +73,10 @@ export class ReliableLLMClient {
         }
 
         const normalizedError = this.normalizeError(error);
-        
-        // Retry on network or rate limit errors
+        lastError = normalizedError;
+
         const shouldRetry = (
-          normalizedError.type === LLMErrorType.NETWORK || 
+          normalizedError.type === LLMErrorType.NETWORK ||
           normalizedError.type === LLMErrorType.RATE_LIMIT
         ) && attempts < this.maxRetries;
 
@@ -83,7 +97,7 @@ export class ReliableLLMClient {
       }
     }
 
-    throw new ReliableLLMError(LLMErrorType.UNKNOWN, 'Max retries exceeded');
+    throw lastError!;
   }
 
   private async resolveApiKey(): Promise<string> {
@@ -97,61 +111,81 @@ export class ReliableLLMClient {
     }
   }
 
-  private async callProvider(prompt: string, apiKey: string): Promise<LLMResult> {
-    if (this.options.provider === 'google') {
-      const ai = new GoogleGenAI({ apiKey });
-
-      const timeoutMs = 10_000;
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timed out after 15s')), timeoutMs);
-      });
-
-      const abortPromise = new Promise<never>((_, reject) => {
-        this.options.signal?.addEventListener('abort', () => {
-          reject(new ReliableLLMError(LLMErrorType.UNKNOWN, 'Request cancelled by caller.'));
-        }, { once: true });
-      });
-
-      const response = await Promise.race([
-        ai.models.generateContent({
-          model: this.options.model,
-          contents: prompt
-        }),
-        timeoutPromise,
-        abortPromise
-      ]);
-
-      if (!response || !response.text) {
-        throw new Error('Empty response from Gemini');
-      }
-
-      return {
-        text: response.text.trim(),
-        usage: {
-          inputTokens: Math.ceil(prompt.length / 4),
-          outputTokens: Math.ceil(response.text.length / 4)
-        }
-      };
+  private async callProvider(prompt: string, apiKey: string, systemInstruction?: string): Promise<LLMResult> {
+    if (this.options.provider !== 'google') {
+      throw new ReliableLLMError(LLMErrorType.UNSUPPORTED, `Provider ${this.options.provider} not implemented.`);
     }
 
-    throw new ReliableLLMError(LLMErrorType.UNSUPPORTED, `Provider ${this.options.provider} not implemented.`);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.options.model}:generateContent?key=${apiKey}`;
+
+    const timeoutSignal = AbortSignal.timeout(10_000);
+
+    const body: Record<string, unknown> = {
+      contents: [{ parts: [{ text: prompt }] }],
+    };
+
+    if (systemInstruction) {
+      body.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: timeoutSignal,
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorBody = await response.json() as GeminiResponse;
+        if (errorBody.error?.message) {
+          errorMessage = errorBody.error.message;
+        }
+      } catch {
+        // JSON parse failed, use status-based message
+      }
+      throw Object.assign(new Error(errorMessage), { status: response.status });
+    }
+
+    const data = await response.json() as GeminiResponse;
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('Empty response from Gemini');
+    }
+
+    return {
+      text: text.trim(),
+      usage: {
+        inputTokens: Math.ceil(prompt.length / 4),
+        outputTokens: Math.ceil(text.length / 4),
+      },
+    };
   }
 
   private normalizeError(error: any): ReliableLLMError {
+    const status: number | undefined = error.status;
+
+    if (status) {
+      if (status === 400 || status === 401 || status === 403) {
+        return new ReliableLLMError(LLMErrorType.AUTHENTICATION, error.message || 'Authentication failed.');
+      }
+      if (status === 429) {
+        return new ReliableLLMError(LLMErrorType.RATE_LIMIT, error.message || 'Rate limit exceeded.');
+      }
+      if (status === 500 || status === 502 || status === 503) {
+        return new ReliableLLMError(LLMErrorType.NETWORK, error.message || 'Network connection failed.');
+      }
+      return new ReliableLLMError(LLMErrorType.UNKNOWN, error.message || `HTTP ${status}`);
+    }
+
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      return new ReliableLLMError(LLMErrorType.NETWORK, 'Request timed out.');
+    }
+
     const msg = error.message || String(error);
-    
-    if (msg.includes('403') || msg.includes('API key not valid') || msg.includes('invalid api key')) {
-      return new ReliableLLMError(LLMErrorType.AUTHENTICATION, 'Invalid API key.');
-    }
-    
-    if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('rate limit')) {
-      return new ReliableLLMError(LLMErrorType.RATE_LIMIT, 'Rate limit exceeded.');
-    }
-    
-    if (msg.includes('Quota exceeded') || msg.includes('quota') || msg.includes('402')) {
-      return new ReliableLLMError(LLMErrorType.QUOTA_EXCEEDED, 'Quota exceeded.');
-    }
-    
+
     if (msg.includes('fetch failed') || msg.includes('Network error') || msg.includes('ECONNREFUSED') || msg.includes('timed out')) {
       return new ReliableLLMError(LLMErrorType.NETWORK, 'Network connection failed.');
     }

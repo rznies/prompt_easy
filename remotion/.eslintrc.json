@@ -1,9 +1,0 @@
-{
-  "plugins": ["@remotion"],
-  "overrides": [
-    {
-      "files": ["*.{ts,tsx}"],
-      "extends": ["plugin:@remotion/recommended"]
-    }
-  ]
-}
