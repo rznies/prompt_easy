@@ -1,5 +1,6 @@
 import { PromptEasyEngine } from '../src/improveEngine';
 import { ReliableLLMClient } from '../src/shared/reliableLLMClient';
+import { ConfigManager } from '../src/shared/configManager';
 import { SettingsStore } from '../src/shared/settingsStore';
 
 // Mock the ReliableLLMClient
@@ -20,22 +21,31 @@ jest.mock('../src/shared/reliableLLMClient', () => ({
   }
 }));
 
-// Mock SettingsStore
+// Mock ConfigManager
+jest.mock('../src/shared/configManager', () => ({
+  ConfigManager: {
+    getManagedConfig: jest.fn().mockResolvedValue({
+      apiKey: 'test-api-key',
+      model: 'gemini-2.0-flash',
+      version: '1.0.0'
+    }),
+    ensureKey: jest.fn().mockResolvedValue('test-api-key'),
+    resetForTest: jest.fn()
+  }
+}));
+
+// Mock SettingsStore for usage tracking
 jest.mock('../src/shared/settingsStore', () => ({
   SettingsStore: {
-    getPreferredModel: jest.fn().mockResolvedValue('gemini-3-flash-preview'),
     updateUsage: jest.fn().mockResolvedValue(undefined)
   }
 }));
 
-describe('PromptEasyEngine (Refactored)', () => {
+describe('PromptEasyEngine', () => {
   let engine: PromptEasyEngine;
 
   beforeEach(() => {
-    engine = new PromptEasyEngine({
-      provider: 'google',
-      model: 'gemini-3-flash-preview',
-    });
+    engine = new PromptEasyEngine({ provider: 'google' });
     jest.clearAllMocks();
   });
 
@@ -50,13 +60,12 @@ describe('PromptEasyEngine (Refactored)', () => {
       expect(SettingsStore.updateUsage).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
     });
 
-    it('uses the preferred model from settings if none provided', async () => {
-      const customEngine = new PromptEasyEngine();
-      await customEngine.improve('test');
+    it('uses the model from ConfigManager', async () => {
+      await engine.improve('test');
       
-      expect(SettingsStore.getPreferredModel).toHaveBeenCalled();
+      expect(ConfigManager.getManagedConfig).toHaveBeenCalled();
       expect(ReliableLLMClient).toHaveBeenCalledWith(expect.objectContaining({
-        model: 'gemini-3-flash-preview'
+        model: 'gemini-2.0-flash'
       }));
     });
 

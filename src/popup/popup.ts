@@ -1,5 +1,6 @@
 import { ServiceBus } from '../shared/serviceBus';
 import { ApiKeyManager } from '../shared/apiKeyManager';
+import { ConfigManager } from '../shared/configManager';
 import { SettingsStore } from '../shared/settingsStore';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -87,8 +88,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Load Preferred Model via SettingsStore
-      modelSelect.value = await SettingsStore.getPreferredModel();
+      // Load Managed Model
+      const managedConfig = await ConfigManager.getManagedConfig();
+      if (managedConfig?.model) {
+        const option = modelSelect.querySelector(`option[value="${managedConfig.model}"]`);
+        if (option) {
+          modelSelect.value = managedConfig.model;
+        }
+      }
+      modelSelect.disabled = true;
 
       // Load Usage Stats via SettingsStore
       const stats = await SettingsStore.getUsageStats();
@@ -136,10 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  modelSelect.addEventListener('change', async () => {
-    await SettingsStore.setPreferredModel(modelSelect.value);
-    showToast('Model preference saved');
-  });
+  // Model selector is disabled - model is managed by ConfigManager
 
   clearStatsBtn.addEventListener('click', async () => {
     if (confirm('Are you sure you want to clear your usage history?')) {

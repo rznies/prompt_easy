@@ -1,6 +1,6 @@
 import { PromptEasyEngine } from '../src/improveEngine';
 import { ReliableLLMClient, LLMErrorType, ReliableLLMError } from '../src/shared/reliableLLMClient';
-import { SettingsStore } from '../src/shared/settingsStore';
+import { ConfigManager } from '../src/shared/configManager';
 
 // Mock ReliableLLMClient
 jest.mock('../src/shared/reliableLLMClient', () => {
@@ -21,11 +21,16 @@ jest.mock('../src/shared/reliableLLMClient', () => {
   };
 });
 
-// Mock SettingsStore
-jest.mock('../src/shared/settingsStore', () => ({
-  SettingsStore: {
-    getPreferredModel: jest.fn().mockResolvedValue('gemini-3-flash-preview'),
-    updateUsage: jest.fn().mockResolvedValue(undefined)
+// Mock ConfigManager
+jest.mock('../src/shared/configManager', () => ({
+  ConfigManager: {
+    getManagedConfig: jest.fn().mockResolvedValue({
+      apiKey: 'test-api-key',
+      model: 'gemini-2.0-flash',
+      version: '1.0.0'
+    }),
+    ensureKey: jest.fn().mockResolvedValue('test-api-key'),
+    resetForTest: jest.fn()
   }
 }));
 

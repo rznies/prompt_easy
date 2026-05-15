@@ -5,6 +5,7 @@
  * Issue #2: Phase 1a - LLM Interface Setup
  */
 
+import { ConfigManager } from './shared/configManager';
 import { SettingsStore } from './shared/settingsStore';
 import { ReliableLLMClient, LLMResult } from './shared/reliableLLMClient';
 
@@ -15,17 +16,14 @@ export interface ImproveOptions {
 
 export interface ImproveEngineConfig {
   provider?: 'google' | 'openai';
-  model?: string;
 }
 
 export class PromptEasyEngine {
   private provider: 'google' | 'openai';
-  private model?: string;
   private readonly MAX_INPUT_TOKENS = 500;
 
   constructor(config: ImproveEngineConfig = {}) {
     this.provider = config.provider || 'google';
-    this.model = config.model;
   }
 
   /**
@@ -38,8 +36,9 @@ export class PromptEasyEngine {
   async improve(prompt: string, options?: ImproveOptions): Promise<string> {
     this.validatePrompt(prompt);
 
-    // Resolve model from settings if not provided in constructor
-    const activeModel = this.model || await SettingsStore.getPreferredModel();
+    // Resolve model from managed config
+    const managedConfig = await ConfigManager.getManagedConfig();
+    const activeModel = managedConfig?.model || 'gemini-2.0-flash';
 
     // Create a reliable client for execution
     const client = new ReliableLLMClient({

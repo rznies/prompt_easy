@@ -8,27 +8,10 @@ export interface UsageStats {
 
 export class SettingsStore {
   private static readonly KEYS = {
-    PREFERRED_MODEL: 'preferredModel',
     TOTAL_CALLS: 'totalCalls',
     TOKENS_IN: 'estimatedTokensIn',
-    TOKENS_OUT: 'estimatedTokensOut',
-    API_KEY_CHIPER: 'apiKeyCipher',
-    API_KEY_IV: 'apiKeyIv',
-    SESSION_ENC_KEY: 'sessionEncKey'
+    TOKENS_OUT: 'estimatedTokensOut'
   };
-
-  private static readonly DEFAULTS = {
-    MODEL: 'gemini-3-flash-preview'
-  };
-
-  static async getPreferredModel(): Promise<string> {
-    const model = await StorageWrapper.getLocal(this.KEYS.PREFERRED_MODEL);
-    return model || this.DEFAULTS.MODEL;
-  }
-
-  static async setPreferredModel(model: string): Promise<void> {
-    await StorageWrapper.setLocal(this.KEYS.PREFERRED_MODEL, model);
-  }
 
   static async getUsageStats(): Promise<UsageStats> {
     const [totalCalls, estimatedTokensIn, estimatedTokensOut] = await Promise.all([

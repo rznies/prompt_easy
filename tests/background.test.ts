@@ -1,5 +1,6 @@
 import { ServiceBus, MessageType } from '../src/shared/serviceBus';
 import { PromptEasyEngine } from '../src/improveEngine';
+import { RateLimiter } from '../src/shared/rateLimiter';
 
 // Mock the dependencies
 jest.mock('../src/shared/serviceBus', () => ({
@@ -14,6 +15,12 @@ jest.mock('../src/shared/serviceBus', () => ({
 
 jest.mock('../src/improveEngine', () => ({
   PromptEasyEngine: jest.fn()
+}));
+
+jest.mock('../src/shared/rateLimiter', () => ({
+  RateLimiter: {
+    checkAndIncrement: jest.fn().mockResolvedValue(undefined)
+  }
 }));
 
 describe('Background Service Worker', () => {
