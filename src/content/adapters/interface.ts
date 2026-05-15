@@ -32,15 +32,8 @@ export abstract class BaseAdapter implements SiteAdapter {
       composer.dispatchEvent(new Event('input', { bubbles: true }));
       composer.dispatchEvent(new Event('change', { bubbles: true }));
     } else {
-      composer.focus();
-      const selection = window.getSelection();
-      if (selection) {
-        selection.selectAllChildren(composer);
-        document.execCommand('insertText', false, text);
-      } else {
-        composer.innerText = text;
-      }
-      composer.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      composer.textContent = text;
+      composer.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
     }
   }
 }

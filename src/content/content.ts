@@ -1,5 +1,6 @@
 import { ServiceBus } from '../shared/serviceBus';
 import { getActiveAdapter } from './adapters/registry';
+import { showToast, getErrorMessage } from './toast';
 
 console.log('Prompt Easy: Content script initialized with ServiceBus');
 
@@ -68,7 +69,7 @@ function injectFloatingButton() {
     const text = (adapter && composer) ? adapter.getText(composer) : (composer ? (composer as any).value || (composer as HTMLElement).innerText : '');
     
     if (!text.trim()) {
-      alert('Could not find prompt text. Please type something first.');
+      showToast(button, 'Could not find prompt text. Please type something first.');
       return;
     }
 
@@ -87,10 +88,10 @@ function injectFloatingButton() {
         (composer as HTMLElement).focus();
       } else {
         navigator.clipboard.writeText(result);
-        alert('Improved prompt copied to clipboard!');
+        showToast(button, 'Improved prompt copied to clipboard!');
       }
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      showToast(button, getErrorMessage(error));
     } finally {
       button.disabled = false;
       button.style.opacity = '1';
@@ -169,7 +170,7 @@ function injectImproveButton() {
       adapter.setText(composer, result);
       composer.focus();
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      showToast(button, getErrorMessage(error));
     } finally {
       button.innerHTML = IMPROVE_ICON;
       button.disabled = false;
