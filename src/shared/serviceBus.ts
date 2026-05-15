@@ -12,6 +12,7 @@ export interface MessageResponse<T = any> {
   success: boolean;
   data?: T;
   error?: string;
+  errorCode?: 'RATE_LIMITED' | 'KEY_NOT_READY' | 'NETWORK_ERROR' | 'UNKNOWN';
 }
 
 /**
@@ -29,7 +30,9 @@ export class ServiceBus {
     });
 
     if (!response.success) {
-      throw new Error(response.error || 'Failed to improve prompt');
+      const error = new Error(response.error || 'Failed to improve prompt');
+      (error as any).errorCode = response.errorCode;
+      throw error;
     }
 
     return response.data!;
@@ -91,7 +94,8 @@ export class ServiceBus {
               // Caller disconnected, no need to respond
               return;
             }
-            port.postMessage({ success: false, error: error.message || String(error) });
+            const errorCode = (error as any).errorCode as MessageResponse['errorCode'] | undefined;
+            port.postMessage({ success: false, error: error.message || String(error), errorCode });
           });
       });
     });
