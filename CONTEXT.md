@@ -46,6 +46,9 @@ Product is for power users. Free tier is a Trojan horse — gets extension insta
 - Client-side with hybrid API key model:
   - v1: BYOK only (users bring their Gemini API key)
   - v2: 3 free improves/day on our key, then BYOK or upgrade to Pro
+- API keys stored in `chrome.storage.session` (cleared on browser restart, extension-scoped)
+- LLM calls have a 10-second timeout; timeouts retry as network errors (max 1 retry)
+- Service worker uses long-lived ports; popup disconnect aborts in-flight LLM requests
 - LLM cost: ~$0.003 per improve (GPT-4o-mini, 500 tokens in/out)
 - COGS: ~$0.12/free user/month (40 improves)
 - Fallback selector list per site + MutationObserver for DOM changes

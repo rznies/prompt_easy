@@ -16,7 +16,7 @@ export interface MessageResponse<T = any> {
 
 /**
  * ServiceBus provides a typed interface for inter-process communication
- * in the Chrome extension.
+ * in the Chrome extension using long-lived ports for disconnect detection.
  */
 export class ServiceBus {
   /**
@@ -36,11 +36,18 @@ export class ServiceBus {
   }
 
   /**
-   * Generic internal sender
+   * Generic internal sender using long-lived ports for disconnect awareness
    */
   private static send(message: { type: MessageType; payload?: any }): Promise<any> {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response) => {
+      const port = chrome.runtime.connect({ name: message.type });
+
+      port.onMessage.addListener((response) => {
+        port.disconnect();
+        resolve(response);
+      });
+
+      port.onDisconnect.addListener(() => {
         if (chrome.runtime.lastError) {
           const errMsg = chrome.runtime.lastError.message || '';
           if (errMsg.includes('Extension context invalidated')) {
@@ -49,27 +56,44 @@ export class ServiceBus {
             reject(new Error(errMsg));
           }
         } else {
-          resolve(response);
+          reject(new Error('Connection to service worker lost.'));
         }
       });
+
+      port.postMessage(message);
     });
   }
 
   /**
-   * Helper for background script to listen for typed messages
+   * Helper for background script to listen for typed messages.
+   * The handler receives (type, payload, abortSignal) where abortSignal
+   * fires when the caller disconnects (e.g., popup closes).
    */
   static addListener(
     handler: (
-      type: MessageType, 
-      payload: any, 
-      sender: chrome.runtime.MessageSender
+      type: MessageType,
+      payload: any,
+      abortSignal: AbortSignal
     ) => Promise<any>
   ): void {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      handler(message.type, message.payload, sender)
-        .then(data => sendResponse({ success: true, data }))
-        .catch(error => sendResponse({ success: false, error: error.message || String(error) }));
-      return true; // Keep port open for async response
+    chrome.runtime.onConnect.addListener((port) => {
+      const abortController = new AbortController();
+
+      port.onDisconnect.addListener(() => {
+        abortController.abort();
+      });
+
+      port.onMessage.addListener((message) => {
+        handler(message.type, message.payload, abortController.signal)
+          .then(data => port.postMessage({ success: true, data }))
+          .catch(error => {
+            if (abortController.signal.aborted) {
+              // Caller disconnected, no need to respond
+              return;
+            }
+            port.postMessage({ success: false, error: error.message || String(error) });
+          });
+      });
     });
   }
 }

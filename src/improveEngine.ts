@@ -10,6 +10,7 @@ import { ReliableLLMClient, LLMResult } from './shared/reliableLLMClient';
 
 export interface ImproveOptions {
   context?: string;
+  signal?: AbortSignal;
 }
 
 export interface ImproveEngineConfig {
@@ -43,7 +44,8 @@ export class PromptEasyEngine {
     // Create a reliable client for execution
     const client = new ReliableLLMClient({
       provider: this.provider,
-      model: activeModel
+      model: activeModel,
+      signal: options?.signal
     });
 
     const systemPrompt = this.buildSystemPrompt(options?.context);

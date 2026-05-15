@@ -29,13 +29,14 @@ export interface ClientOptions {
   provider: 'google' | 'openai';
   model: string;
   maxRetries?: number;
+  signal?: AbortSignal;
 }
 
 export class ReliableLLMClient {
   private readonly maxRetries: number;
 
   constructor(private options: ClientOptions) {
-    this.maxRetries = options.maxRetries ?? 2;
+    this.maxRetries = options.maxRetries ?? 1;
   }
 
   async execute(prompt: string): Promise<LLMResult> {
@@ -45,10 +46,18 @@ export class ReliableLLMClient {
     const apiKey = await this.resolveApiKey();
 
     while (attempts <= this.maxRetries) {
+      if (this.options.signal?.aborted) {
+        throw new ReliableLLMError(LLMErrorType.UNKNOWN, 'Request cancelled by caller.');
+      }
+
       try {
         const result = await this.callProvider(prompt, apiKey);
         return result;
       } catch (error: any) {
+        if (this.options.signal?.aborted) {
+          throw new ReliableLLMError(LLMErrorType.UNKNOWN, 'Request cancelled by caller.');
+        }
+
         const normalizedError = this.normalizeError(error);
         
         // Retry on network or rate limit errors
@@ -60,7 +69,13 @@ export class ReliableLLMClient {
         if (shouldRetry) {
           attempts++;
           const delay = Math.pow(2, attempts - 1) * 1000;
-          await new Promise(res => setTimeout(res, delay));
+          await new Promise((res) => {
+            const timer = setTimeout(res, delay);
+            this.options.signal?.addEventListener('abort', () => {
+              clearTimeout(timer);
+              res(undefined);
+            }, { once: true });
+          });
           continue;
         }
 
@@ -85,10 +100,26 @@ export class ReliableLLMClient {
   private async callProvider(prompt: string, apiKey: string): Promise<LLMResult> {
     if (this.options.provider === 'google') {
       const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: this.options.model,
-        contents: prompt
+
+      const timeoutMs = 10_000;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out after 15s')), timeoutMs);
       });
+
+      const abortPromise = new Promise<never>((_, reject) => {
+        this.options.signal?.addEventListener('abort', () => {
+          reject(new ReliableLLMError(LLMErrorType.UNKNOWN, 'Request cancelled by caller.'));
+        }, { once: true });
+      });
+
+      const response = await Promise.race([
+        ai.models.generateContent({
+          model: this.options.model,
+          contents: prompt
+        }),
+        timeoutPromise,
+        abortPromise
+      ]);
 
       if (!response || !response.text) {
         throw new Error('Empty response from Gemini');
@@ -97,7 +128,6 @@ export class ReliableLLMClient {
       return {
         text: response.text.trim(),
         usage: {
-          // Rough estimation since web SDK doesn't always return exact usage in all modes
           inputTokens: Math.ceil(prompt.length / 4),
           outputTokens: Math.ceil(response.text.length / 4)
         }
@@ -122,7 +152,7 @@ export class ReliableLLMClient {
       return new ReliableLLMError(LLMErrorType.QUOTA_EXCEEDED, 'Quota exceeded.');
     }
     
-    if (msg.includes('fetch failed') || msg.includes('Network error') || msg.includes('ECONNREFUSED')) {
+    if (msg.includes('fetch failed') || msg.includes('Network error') || msg.includes('ECONNREFUSED') || msg.includes('timed out')) {
       return new ReliableLLMError(LLMErrorType.NETWORK, 'Network connection failed.');
     }
 
