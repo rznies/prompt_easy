@@ -12,7 +12,9 @@ jest.mock('../src/shared/serviceBus', () => ({
   }
 }));
 
-jest.mock('../src/improveEngine');
+jest.mock('../src/improveEngine', () => ({
+  PromptEasyEngine: jest.fn()
+}));
 
 describe('Background Service Worker', () => {
   let messageHandler: any;

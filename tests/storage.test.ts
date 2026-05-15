@@ -14,6 +14,9 @@ describe('StorageWrapper', () => {
           set: jest.fn(),
         },
       },
+      runtime: {
+        lastError: undefined,
+      },
     };
   });
 
@@ -56,6 +59,48 @@ describe('StorageWrapper', () => {
       
       expect(getMock).toHaveBeenCalledWith(['testSessionKey'], expect.any(Function));
       expect(value).toBe('testSessionValue');
+    });
+  });
+
+  describe('lastError rejection', () => {
+    it('should reject setLocal when chrome.runtime.lastError is set', async () => {
+      const setMock = (global as any).chrome.storage.local.set as jest.Mock;
+      setMock.mockImplementation((data, callback) => {
+        (global as any).chrome.runtime.lastError = { message: 'Storage error' };
+        callback && callback();
+      });
+
+      await expect(StorageWrapper.setLocal('key', 'value')).rejects.toThrow('Storage error');
+    });
+
+    it('should reject getLocal when chrome.runtime.lastError is set', async () => {
+      const getMock = (global as any).chrome.storage.local.get as jest.Mock;
+      getMock.mockImplementation((keys, callback) => {
+        (global as any).chrome.runtime.lastError = { message: 'Storage error' };
+        callback && callback({});
+      });
+
+      await expect(StorageWrapper.getLocal('key')).rejects.toThrow('Storage error');
+    });
+
+    it('should reject setSession when chrome.runtime.lastError is set', async () => {
+      const setMock = (global as any).chrome.storage.session.set as jest.Mock;
+      setMock.mockImplementation((data, callback) => {
+        (global as any).chrome.runtime.lastError = { message: 'Storage error' };
+        callback && callback();
+      });
+
+      await expect(StorageWrapper.setSession('key', 'value')).rejects.toThrow('Storage error');
+    });
+
+    it('should reject getSession when chrome.runtime.lastError is set', async () => {
+      const getMock = (global as any).chrome.storage.session.get as jest.Mock;
+      getMock.mockImplementation((keys, callback) => {
+        (global as any).chrome.runtime.lastError = { message: 'Storage error' };
+        callback && callback({});
+      });
+
+      await expect(StorageWrapper.getSession('key')).rejects.toThrow('Storage error');
     });
   });
 });

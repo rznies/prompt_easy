@@ -4,10 +4,20 @@ import { SettingsStore } from '../src/shared/settingsStore';
 
 // Mock ReliableLLMClient
 jest.mock('../src/shared/reliableLLMClient', () => {
-  const original = jest.requireActual('../src/shared/reliableLLMClient');
   return {
-    ...original,
-    ReliableLLMClient: jest.fn()
+    ReliableLLMClient: jest.fn(),
+    LLMErrorType: {
+      AUTHENTICATION: 'AUTHENTICATION',
+      RATE_LIMIT: 'RATE_LIMIT',
+      QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+      NETWORK: 'NETWORK',
+    },
+    ReliableLLMError: class ReliableLLMError extends Error {
+      constructor(public type: string, message: string) {
+        super(message);
+        this.name = 'ReliableLLMError';
+      }
+    }
   };
 });
 

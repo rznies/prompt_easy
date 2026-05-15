@@ -36,6 +36,8 @@
     "esbuild": "^0.28.0",
     "eslint": "^8.57.1",
     "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.4.1",
+    "jest-fetch-mock": "^3.0.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "remotion": "^4.0.457",

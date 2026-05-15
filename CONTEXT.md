@@ -46,8 +46,26 @@ Product is for power users. Free tier is a Trojan horse — gets extension insta
 - Client-side with hybrid API key model:
   - v1: BYOK only (users bring their Gemini API key)
   - v2: 3 free improves/day on our key, then BYOK or upgrade to Pro
-- API keys stored in `chrome.storage.session` (cleared on browser restart, extension-scoped)
-- LLM calls have a 10-second timeout; timeouts retry as network errors (max 1 retry)
+- API keys stored in `chrome.storage.local` (persistent, extension-scoped); managed key fetched from remote JSON config endpoint (`{ "apiKey": "...", "version": N }`) on install
+- Install-time key fetch retries with exponential backoff (3 attempts); falls back to lazy retry on first "Improve" click if all fail
+- Key freshness checked once per 24h via `chrome.alarms`; startup checks are throttled by a `lastKeyCheck` timestamp in storage
+- Legacy BYOK session keys are purged on extension update to prevent conflicting state
+- Test suite uses `jest-fetch-mock` for HTTP call interception
+- Config endpoint URL delivered as hardcoded constant in `src/shared/config.ts`
+- `"alarms"` permission added to manifest for daily key freshness checks
+- `onInstalled` discriminates by `reason`: `install` → fetch key only; `update` → purge legacy session key then fetch key; other reasons → no-op
+- Usage stats tracked internally only; no stats display or "Clear History" button in popup UI
+- Client-side device-scoped rate limiter: 3 free improves/day tracked in `chrome.storage.local` (`dailyUsageCount` + `usageDate`); soft limit for v1.0
+- `MessageResponse` extended with `errorCode` field (`RATE_LIMITED`, `KEY_NOT_READY`, `NETWORK_ERROR`, `UNKNOWN`) for UI differentiation
+- Jest test environment switched to `jsdom` with `jest-fetch-mock`
+- In-flight config fetch Promise deduplication to prevent concurrent key fetches
+- Single-view popup: no settings view, no gear icon, no back button — minimalist improve-only interface
+- `ConfigManager` consolidates managed config (key + model) into single storage read; replaces `ApiKeyManager` and dead `SettingsStore` model methods
+- Gemini REST API uses `systemInstruction` field for system prompt, `contents` array for user prompt
+- `fetch()` timeouts use `AbortSignal.timeout()` for proper request cancellation
+- Content script `alert()` replaced with inline non-blocking toast near Improve button
+- `document.execCommand('insertText')` replaced with modern `InputEvent` dispatch for contenteditable composers
+- Model is locked server-side via config envelope; no user model selection
 - Service worker uses long-lived ports; popup disconnect aborts in-flight LLM requests
 - LLM cost: ~$0.003 per improve (GPT-4o-mini, 500 tokens in/out)
 - COGS: ~$0.12/free user/month (40 improves)
