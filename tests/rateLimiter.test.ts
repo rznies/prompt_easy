@@ -1,6 +1,12 @@
 import { RateLimiter } from '../src/shared/rateLimiter';
 
-describe('RateLimiter', () => {
+// NOTE: RateLimiter is deliberately DISABLED in rateLimiter.ts
+// (demo-friendly: no daily cap). These tests lock that contract:
+// checkAndIncrement must always resolve and never touch storage.
+// If DISABLED is ever flipped to false, replace this file with
+// enabled-behavior tests (3/day cap, date rollover, RATE_LIMITED).
+
+describe('RateLimiter (disabled)', () => {
   let storedData: Record<string, any> = {};
 
   beforeEach(() => {
@@ -9,12 +15,7 @@ describe('RateLimiter', () => {
       storage: {
         local: {
           get: jest.fn((keys, callback) => {
-            const result: Record<string, any> = {};
-            const keysToFetch = Array.isArray(keys) ? keys : [keys];
-            for (const key of keysToFetch) {
-              result[key] = storedData[key];
-            }
-            callback(result);
+            callback({});
           }),
           set: jest.fn((data, callback) => {
             Object.assign(storedData, data);
@@ -28,45 +29,16 @@ describe('RateLimiter', () => {
     };
   });
 
-  describe('checkAndIncrement()', () => {
-    it('allows first improve call and increments counter', async () => {
-      await RateLimiter.checkAndIncrement();
-      expect(storedData.dailyUsageCount).toBe(1);
-    });
+  it('resolves without throwing', async () => {
+    await expect(RateLimiter.checkAndIncrement()).resolves.toBeUndefined();
+  });
 
-    it('allows up to 3 improves per day', async () => {
-      await RateLimiter.checkAndIncrement();
-      await RateLimiter.checkAndIncrement();
-      await RateLimiter.checkAndIncrement();
-      expect(storedData.dailyUsageCount).toBe(3);
-    });
-
-    it('rejects on 4th call with RATE_LIMITED error', async () => {
-      await RateLimiter.checkAndIncrement();
-      await RateLimiter.checkAndIncrement();
-      await RateLimiter.checkAndIncrement();
-      
-      await expect(RateLimiter.checkAndIncrement()).rejects.toEqual(
-        expect.objectContaining({ errorCode: 'RATE_LIMITED' })
-      );
-    });
-
-    it('resets counter when date rolls over', async () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      storedData.usageDate = yesterday.toISOString().split('T')[0];
-      storedData.dailyUsageCount = 3;
-
-      await RateLimiter.checkAndIncrement();
-      
-      expect(storedData.dailyUsageCount).toBe(1);
-      expect(storedData.usageDate).toBe(new Date().toISOString().split('T')[0]);
-    });
-
-    it('persists usageDate as ISO date string', async () => {
-      await RateLimiter.checkAndIncrement();
-      const today = new Date().toISOString().split('T')[0];
-      expect(storedData.usageDate).toBe(today);
-    });
+  it('never writes usage to storage while disabled', async () => {
+    await RateLimiter.checkAndIncrement();
+    await RateLimiter.checkAndIncrement();
+    await RateLimiter.checkAndIncrement();
+    await RateLimiter.checkAndIncrement();
+    expect(storedData.dailyUsageCount).toBeUndefined();
+    expect(storedData.usageDate).toBeUndefined();
   });
 });

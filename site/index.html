@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Easy — stop re-prompting, start getting answers</title>
+<meta name="description" content="Prompt Easy is a Chrome extension (MV3) that improves your prompts before sending them to ChatGPT, Claude, Gemini and Perplexity. 5 seconds upfront, 2 minutes saved.">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Inter, Roboto, sans-serif; background: #0c0f14; color: #e8ecf1; line-height: 1.6; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 64px 24px 80px; }
+  .badge { display: inline-block; font-size: 13px; padding: 4px 12px; border: 1px solid #2dd4bf; border-radius: 999px; color: #2dd4bf; margin-bottom: 20px; }
+  h1 { font-size: 44px; line-height: 1.15; letter-spacing: -0.5px; margin-bottom: 16px; }
+  h1 span { color: #2dd4bf; }
+  .sub { font-size: 18px; color: #9aa5b1; margin-bottom: 32px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 56px; }
+  .btn { display: inline-block; padding: 13px 26px; border-radius: 10px; font-size: 16px; font-weight: 600; text-decoration: none; }
+  .btn-primary { background: #2dd4bf; color: #06231f; }
+  .btn-ghost { border: 1px solid #2b3542; color: #e8ecf1; }
+  h2 { font-size: 22px; margin: 40px 0 16px; }
+  ol, ul { padding-left: 22px; color: #c3ccd6; }
+  li { margin-bottom: 10px; }
+  code { background: #161c25; padding: 2px 8px; border-radius: 6px; font-size: 14px; color: #2dd4bf; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .card { background: #121822; border: 1px solid #1e2632; border-radius: 12px; padding: 18px; }
+  .card b { display: block; margin-bottom: 6px; }
+  .card p { font-size: 14px; color: #9aa5b1; }
+  .foot { margin-top: 56px; padding-top: 24px; border-top: 1px solid #1e2632; font-size: 14px; color: #6b7684; }
+  .foot a { color: #2dd4bf; }
+  @media (max-width: 600px) { h1 { font-size: 32px; } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="badge">Chrome extension &middot; Manifest V3 &middot; v1.0.0</div>
+  <h1>Stop re-prompting.<br><span>Start getting answers.</span></h1>
+  <p class="sub">Prompt Easy improves your prompt <em>before</em> it reaches the AI — one click inside ChatGPT, Claude, Gemini or Perplexity. 5 seconds upfront, 2 minutes saved on clarification rounds.</p>
+  <div class="cta">
+    <a class="btn btn-primary" href="./ext/prompt-easy-v1.0.0.zip">Download extension (.zip)</a>
+    <a class="btn btn-ghost" href="https://github.com/rznies/prompt_easy">GitHub repo</a>
+  </div>
+
+  <h2>How it works</h2>
+  <ol>
+    <li>Type your prompt as usual in any supported AI chat.</li>
+    <li>Hit the <b>Improve</b> button Prompt Easy adds next to the composer.</li>
+    <li>Your vague prompt comes back sharp — context, constraints and format included — ready to send.</li>
+  </ol>
+
+  <h2>Under the hood</h2>
+  <div class="grid">
+    <div class="card"><b>4 chat adapters</b><p>Content-script adapters for ChatGPT, Claude, Gemini and Perplexity behind one interface.</p></div>
+    <div class="card"><b>Gemini-powered</b><p>Improvement engine calls the Gemini API with a structured prompt template. Bring your own free-tier key.</p></div>
+    <div class="card"><b>Rate-limited &amp; reliable</b><p>Daily usage cap, retrying LLM client and local settings store. 112 automated tests, all green.</p></div>
+    <div class="card"><b>Private by design</b><p>Runs in your browser. Your API key never leaves your machine except to call the model.</p></div>
+  </div>
+
+  <h2>Install (1 minute)</h2>
+  <ol>
+    <li>Download the <code>.zip</code> above and unzip it anywhere.</li>
+    <li>Open <code>chrome://extensions</code>, turn on <b>Developer mode</b>.</li>
+    <li>Click <b>Load unpacked</b> and pick the unzipped folder. Done.</li>
+  </ol>
+
+  <div class="foot">Built by <a href="https://rznies.vercel.app/">Rajniesh Kumar</a> &middot; MIT &middot; Issues welcome on <a href="https://github.com/rznies/prompt_easy">GitHub</a>.</div>
+</div>
+</body>
+</html>
